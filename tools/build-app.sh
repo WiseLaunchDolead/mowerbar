@@ -3,7 +3,7 @@
 set -eu
 ROOT="${0:A:h:h}"
 cd "$ROOT"
-VERSION="0.2.1"
+VERSION="0.2.2"
 BUNDLE_ID="${BUNDLE_ID:-io.github.wiselaunchdolead.mowerbar}"
 swift build -c release
 BIN_DIR="$(swift build -c release --show-bin-path)"
