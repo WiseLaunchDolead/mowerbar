@@ -1,0 +1,11 @@
+.build/
+.swiftpm/
+dist/
+*.xcuserstate
+.DS_Store
+# Never commit sessions, captures or local secrets.
+*.pcap
+*.pcapng
+session*.json
+*.env
+.env*
