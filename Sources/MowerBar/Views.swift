@@ -315,19 +315,19 @@ struct MainView: View {
                 else { Button("Turn on notifications") { Task { await store.enableNotifications() } } }
             } header: { Text("Notifications") } footer: {
                 Text("Errors, low battery and activity changes. MowerBar must stay open and the Mac awake; you can close the window, MowerBar stays in the menu bar.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary).sectionNote()
             }
             Section {
                 Toggle("Show the icon in the menu bar", isOn: $showMenuBarIcon)
             } header: { Text("Menu bar") } footer: {
                 Text("The menu bar panel shows the mower’s state and commands, even with the window closed. Quitting MowerBar also removes the icon.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary).sectionNote()
             }
             Section {
                 Toggle("Offer a resume attempt after an error", isOn: $experimentalResume)
             } header: { Text("Experimental") } footer: {
                 Text("For wired mowers, Worx asks you to press Start on the mower after errors such as “outside the mowing area”. This option resends start or return to base with the current error, the format the official app uses for errors it considers resumable. Not validated by Worx: the mower may move or start its blades, so only try with someone next to it and the area clear.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary).sectionNote()
             }
             Section("Worx account") {
                 LabeledContent("Session", value: store.sessionAvailable ? String(localized: "Connected · macOS Keychain") : String(localized: "Not connected"))
@@ -344,7 +344,7 @@ struct MainView: View {
                 }
             } header: { Text("Connection") } footer: {
                 Text("MowerBar \(AppInfo.version) · unofficial app, not affiliated with Worx or Positec. Commands go through the Worx cloud.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary).sectionNote()
             }
         }.formStyle(.grouped).task { await store.updateNotificationStatus() }
     }
@@ -378,7 +378,7 @@ struct MainView: View {
             }
         } header: { Text("Fewer boundary exits") } footer: {
             Text("More wheel torque helps on slopes and wet grass, at the cost of more wear on the lawn: change it in steps of 10 and compare the activity log over a week or two. Turning off edge cutting on some slots, in Schedule, shows whether exits happen during it. None of these settings moves the mower.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondary).sectionNote()
         }
     }
 }
@@ -389,4 +389,11 @@ extension String {
 
 enum AppInfo {
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev" }
+}
+
+extension View {
+    /// Section footers in grouped forms default to trailing alignment on macOS; read them like body text.
+    func sectionNote() -> some View {
+        multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
