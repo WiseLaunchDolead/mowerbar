@@ -114,7 +114,14 @@ struct MenuPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let mower = store.mower { robot(mower) }
-            else if !store.sessionAvailable { Label("Worx account not connected", systemImage: "person.crop.circle.badge.exclamationmark").foregroundStyle(.secondary) }
+            else if !store.sessionAvailable {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Worx account not connected", systemImage: "person.crop.circle.badge.exclamationmark").foregroundStyle(.secondary)
+                    // The sign-in sheet lives on the main window, which may be closed: open it first.
+                    Button { openMain(); store.showLogin = true } label: { Text("Connect my Worx account").frame(maxWidth: .infinity) }
+                        .buttonStyle(.borderedProminent).controlSize(.large)
+                }
+            }
             else if store.busy { ProgressView("Looking for your mower…").controlSize(.small) }
             else { Label("No mower found", systemImage: "leaf").foregroundStyle(.secondary) }
             Divider()
@@ -171,9 +178,10 @@ struct MenuPanel: View {
             }.controlSize(.large)
         }.padding(10).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
+    private func openMain() { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
     private var footer: some View {
         HStack(spacing: 8) {
-            Button("Open MowerBar") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+            Button("Open MowerBar") { openMain() }
             Spacer()
             Button { Task { await store.refresh() } } label: { Image(systemName: "arrow.clockwise") }
                 .buttonStyle(.borderless).help("Refresh").disabled(store.busy || !store.sessionAvailable)
