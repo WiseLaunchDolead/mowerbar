@@ -22,7 +22,8 @@ public enum MowerCommand: Int, CaseIterable, Sendable {
 
 /// Configuration changes MowerBar can send. None of them moves the mower.
 public enum MowerSetting: Equatable, Sendable {
-    case torque(Int), rainDelay(Int), edgeCut(day: Int, second: Bool, enabled: Bool)
+    /// `slot` creates or replaces the slot at its day and position (`second` = the `dd` list).
+    case torque(Int), rainDelay(Int), slot(ScheduleSlot), removeSlot(day: Int, second: Bool)
     public static let torqueRange = -50...50
     public static let rainDelayRange = 0...1440
 }
@@ -52,18 +53,40 @@ public struct CommandEnvelope {
         case .rainDelay(let minutes):
             guard MowerSetting.rainDelayRange.contains(minutes) else { throw ProtocolError.invalid(String(localized: "Rain delay must be between 0 and 1440 minutes.")) }
             body["rd"] = minutes
-        case .edgeCut(let day, let second, let enabled):
-            guard let schedule = config.schedule else { throw ProtocolError.invalid(String(localized: "The mower’s schedule has not been received yet.")) }
-            // Same fields as the official app for wired mowers: the one-time mow (`ots`) is never sent back.
-            var sc = schedule.filter { ["d", "dd", "m", "p", "distm"].contains($0.key) }
-            let key = second ? "dd" : "d"
-            guard var days = sc[key] as? [[Any]], days.indices.contains(day), days[day].count >= 3,
-                  (days[day][1] as? Int ?? 0) > 0 else { throw ProtocolError.invalid(String(localized: "This schedule slot does not exist.")) }
-            days[day][2] = enabled ? 1 : 0
-            sc[key] = days
+        case .slot(let slot):
+            guard let begin = ScheduleSlot.minutes(of: slot.start), (1...1440).contains(slot.minutes), begin + slot.minutes <= 1440 else {
+                throw ProtocolError.invalid(String(localized: "A slot must start and end on the same day."))
+            }
+            var sc = try editableSchedule(config, day: slot.day, second: slot.second)
+            let otherKey = slot.second ? "d" : "dd"
+            if let other = (sc[otherKey] as? [[Any]])?[slot.day], other.count >= 3, let otherStart = ScheduleSlot.minutes(of: other[0] as? String ?? ""),
+               let otherLength = other[1] as? Int, otherLength > 0, begin < otherStart + otherLength, otherStart < begin + slot.minutes {
+                throw ProtocolError.invalid(String(localized: "The two slots of a day cannot overlap."))
+            }
+            sc.set(slot.second ? "dd" : "d", day: slot.day, to: [slot.start, slot.minutes, slot.edgeCut ? 1 : 0])
+            body["sc"] = sc
+        case .removeSlot(let day, let second):
+            var sc = try editableSchedule(config, day: day, second: second)
+            let empty: [Any] = ["00:00", 0, 0]
+            if !second, let next = (sc["dd"] as? [[Any]])?[day], next.count >= 3, (next[1] as? Int ?? 0) > 0 {
+                // Keep a day's remaining slot in the first position.
+                sc.set("d", day: day, to: next); sc.set("dd", day: day, to: empty)
+            } else {
+                sc.set(second ? "dd" : "d", day: day, to: empty)
+            }
             body["sc"] = sc
         }
         return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+    }
+
+    /// Same fields as the official app for wired mowers: the one-time mow (`ots`) is never sent back.
+    private static func editableSchedule(_ config: MowerConfig, day: Int, second: Bool) throws -> [String: Any] {
+        guard let schedule = config.schedule else { throw ProtocolError.invalid(String(localized: "The mower’s schedule has not been received yet.")) }
+        let sc = schedule.filter { ["d", "dd", "m", "p", "distm"].contains($0.key) }
+        guard let days = sc[second ? "dd" : "d"] as? [[Any]], days.indices.contains(day), days[day].count >= 3 else {
+            throw ProtocolError.invalid(String(localized: "This schedule slot does not exist."))
+        }
+        return sc
     }
 
     private static func envelope(command: Int, serial: String, protocolVersion: Int, date: Date, id: Int, timeZone: TimeZone) throws -> [String: Any] {
@@ -164,5 +187,12 @@ public enum MQTTWire {
         let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
         let escaped = parts.map { $0.addingPercentEncoding(withAllowedCharacters: allowed) ?? "" }
         return "username?jwt=\(escaped[0]).\(escaped[1])&x-amz-customauthorizer-signature=\(escaped[2])"
+    }
+}
+
+private extension Dictionary where Key == String, Value == Any {
+    mutating func set(_ key: String, day: Int, to entry: [Any]) {
+        guard var days = self[key] as? [[Any]] else { return }
+        days[day] = entry; self[key] = days
     }
 }

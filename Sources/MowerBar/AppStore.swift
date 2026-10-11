@@ -35,6 +35,7 @@ enum Preference {
     private var activeToken = ""
     private var pendingID: Int?
     private var pendingSettingID: Int?
+    private var pendingSettingBody: [String: Any]?
     private var lastStatusRequest = Date.distantPast
     private var lastAutoRefresh = Date.distantPast
     private var stopping = false
@@ -188,6 +189,7 @@ enum Preference {
         do {
             let data = try CommandEnvelope.setting(setting, config: mower.config, serial: mower.serial,
                 protocolVersion: mower.protocolVersion, id: id, timeZone: timeZone(mower))
+            pendingSettingBody = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             try await mqtt.publish(topic: mower.topicIn, payload: data)
             log(String(localized: "Setting sent: \(describe(setting))"))
             settingTimeout = Task { @MainActor [weak self] in
@@ -204,17 +206,13 @@ enum Preference {
         switch setting {
         case .torque(let value): return String(localized: "wheel torque \(value) %")
         case .rainDelay(let minutes): return String(localized: "rain delay \(minutes) min")
-        case .edgeCut(let day, let second, let enabled):
-            let name = Calendar.current.weekdaySymbols[day % 7] + (second ? " (2)" : "")
-            return enabled ? String(localized: "edge cut on for \(name)") : String(localized: "edge cut off for \(name)")
-        }
-    }
-    private func confirmed(_ setting: MowerSetting, by config: MowerConfig) -> Bool {
-        switch setting {
-        case .torque(let value): return config.torque == value
-        case .rainDelay(let minutes): return config.rainDelay == minutes
-        case .edgeCut(let day, let second, let enabled):
-            return config.slots.contains { $0.day == day && $0.second == second && $0.edgeCut == enabled }
+        case .slot(let slot):
+            let span = "\(slot.start)–\(ScheduleText.clock(slot.endMinutes))"
+            return slot.edgeCut ? String(localized: "\(ScheduleText.day(slot.day)) \(span), with edge cut")
+                                : String(localized: "\(ScheduleText.day(slot.day)) \(span), without edge cut")
+        case .removeSlot(let day, let second):
+            let start = mower?.config.slots.first { $0.day == day && $0.second == second }?.start ?? ""
+            return String(localized: "remove the \(Calendar.current.weekdaySymbols[day % 7]) \(start) slot")
         }
     }
 
@@ -257,7 +255,7 @@ enum Preference {
             }
             if let id = pendingSettingID, next.correlationID == id, let setting = pendingSetting {
                 settingTimeout?.cancel(); pendingSettingID = nil; pendingSetting = nil
-                if confirmed(setting, by: mowers[index].config) {
+                if pendingSettingBody.map(mowers[index].config.reflects) ?? false {
                     message = String(localized: "Setting applied: \(describe(setting)).")
                 } else {
                     message = nil; failure = String(localized: "The mower answered but kept its previous value for \(describe(setting)).")

@@ -3,16 +3,17 @@ import AppKit
 import MowerBarCore
 
 enum Page: String, CaseIterable, Identifiable {
-    case dashboard, history, settings
+    case dashboard, schedule, history, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .dashboard: return String(localized: "My mower")
+        case .schedule: return String(localized: "Schedule")
         case .history: return String(localized: "Activity log")
         case .settings: return String(localized: "Settings")
         }
     }
-    var icon: String { switch self { case .dashboard: return "leaf"; case .history: return "clock.arrow.circlepath"; case .settings: return "gearshape" } }
+    var icon: String { switch self { case .dashboard: return "leaf"; case .schedule: return "calendar"; case .history: return "clock.arrow.circlepath"; case .settings: return "gearshape" } }
 }
 
 struct DayGroup: Identifiable {
@@ -53,6 +54,7 @@ struct MainView: View {
                 } else {
                     switch page ?? .dashboard {
                     case .dashboard: dashboard
+                    case .schedule: ScheduleView()
                     case .history: history
                     case .settings: settings
                     }
@@ -366,14 +368,8 @@ struct MainView: View {
                     }
                 }.disabled(!enabled)
             }
-            ForEach(config.slots, id: \.self) { slot in
-                Toggle(isOn: Binding(get: { slot.edgeCut }, set: { settingConfirmation = .edgeCut(day: slot.day, second: slot.second, enabled: $0) })) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(Calendar.current.weekdaySymbols[slot.day % 7].capitalizedFirst)
-                        Text("\(slot.start) · \(Duration.seconds(slot.minutes * 60).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))) · edge cut")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }.disabled(!enabled)
+            LabeledContent("Edge cutting per slot") {
+                Button("Open the schedule") { page = .schedule }.buttonStyle(.link)
             }
             if !enabled, let mower = store.mower { ControlHintView(hint: ControlHint(store: store, mower: mower), compact: true) }
             if let setting = store.pendingSetting {
@@ -381,7 +377,7 @@ struct MainView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         } header: { Text("Fewer boundary exits") } footer: {
-            Text("More wheel torque helps on slopes and wet grass, at the cost of more wear on the lawn: change it in steps of 10 and compare the activity log over a week or two. Turning off edge cutting on some slots shows whether exits happen during it. None of these settings moves the mower.")
+            Text("More wheel torque helps on slopes and wet grass, at the cost of more wear on the lawn: change it in steps of 10 and compare the activity log over a week or two. Turning off edge cutting on some slots, in Schedule, shows whether exits happen during it. None of these settings moves the mower.")
                 .foregroundStyle(.secondary)
         }
     }

@@ -101,13 +101,15 @@ final class ProtocolTests: XCTestCase {
     func testSettingBoundsAreEnforced() {
         XCTAssertThrowsError(try json(.torque(60))); XCTAssertThrowsError(try json(.torque(-51)))
         XCTAssertThrowsError(try json(.rainDelay(-1))); XCTAssertThrowsError(try json(.rainDelay(1441)))
-        XCTAssertThrowsError(try json(.edgeCut(day: 1, second: false, enabled: true))) // empty slot
-        XCTAssertThrowsError(try json(.edgeCut(day: 9, second: false, enabled: true)))
+        XCTAssertThrowsError(try json(.slot(ScheduleSlot(day: 9, second: false, start: "09:00", minutes: 60, edgeCut: true))))
+        XCTAssertThrowsError(try json(.slot(ScheduleSlot(day: 1, second: false, start: "23:00", minutes: 120, edgeCut: true)))) // past midnight
+        XCTAssertThrowsError(try json(.slot(ScheduleSlot(day: 1, second: false, start: "9:00", minutes: 60, edgeCut: true))))
+        XCTAssertThrowsError(try json(.slot(ScheduleSlot(day: 1, second: false, start: "09:00", minutes: 0, edgeCut: true))))
         XCTAssertThrowsError(try CommandEnvelope.setting(.torque(10), config: sampleConfig, serial: "TEST", protocolVersion: 1, id: 2048))
-        XCTAssertThrowsError(try CommandEnvelope.setting(.edgeCut(day: 0, second: false, enabled: false), config: MowerConfig(), serial: "TEST", protocolVersion: 0, id: 2048))
+        XCTAssertThrowsError(try CommandEnvelope.setting(.removeSlot(day: 0, second: false), config: MowerConfig(), serial: "TEST", protocolVersion: 0, id: 2048))
     }
-    func testEdgeCutRewriteOnlyChangesThatFlagAndDropsOneTimeMow() throws {
-        let body = try json(.edgeCut(day: 2, second: true, enabled: false))
+    func testSlotRewriteOnlyChangesThatSlotAndDropsOneTimeMow() throws {
+        let body = try json(.slot(ScheduleSlot(day: 2, second: true, start: "15:00", minutes: 60, edgeCut: false)))
         XCTAssertEqual(body["cmd"] as? Int, 0)
         let sc = try XCTUnwrap(body["sc"] as? [String: Any])
         XCTAssertEqual(Set(sc.keys), ["d", "dd", "m", "p", "distm"])
@@ -132,5 +134,32 @@ final class ProtocolTests: XCTestCase {
         XCTAssertTrue(policy(error: 4).resume); XCTAssertFalse(policy(error: 0).resume)
         XCTAssertFalse(policy(error: 4, age: 400).resume); XCTAssertFalse(policy(error: 4, connected: false).resume)
         XCTAssertFalse(policy(error: 4).start); XCTAssertFalse(policy(error: 4).home)
+    }
+
+    func testSlotsCanBeAddedMovedAndRemovedWithoutOverlap() throws {
+        // Add a slot on an empty day, then check where the next one would go.
+        let added = try json(.slot(ScheduleSlot(day: 1, second: false, start: "08:30", minutes: 45, edgeCut: false)))
+        let d = try XCTUnwrap((added["sc"] as? [String: Any])?["d"] as? [[Any]])
+        XCTAssertEqual(d[1] as NSArray, ["08:30", 45, 0] as NSArray)
+        XCTAssertEqual(sampleConfig.freePosition(day: 1), false)
+        XCTAssertEqual(sampleConfig.freePosition(day: 0), true)
+        XCTAssertNil(sampleConfig.freePosition(day: 2))
+        // Overlapping the other slot of the same day is refused, touching it is fine.
+        XCTAssertThrowsError(try json(.slot(ScheduleSlot(day: 2, second: true, start: "10:30", minutes: 60, edgeCut: true))))
+        XCTAssertNoThrow(try json(.slot(ScheduleSlot(day: 2, second: true, start: "11:00", minutes: 60, edgeCut: true))))
+        // Removing the first slot moves the second one up.
+        let removed = try XCTUnwrap(try json(.removeSlot(day: 2, second: false))["sc"] as? [String: Any])
+        XCTAssertEqual((removed["d"] as? [[Any]])?[2] as NSArray?, ["15:00", 60, 1] as NSArray)
+        XCTAssertEqual((removed["dd"] as? [[Any]])?[2] as NSArray?, ["00:00", 0, 0] as NSArray)
+        let removedSecond = try XCTUnwrap(try json(.removeSlot(day: 2, second: true))["sc"] as? [String: Any])
+        XCTAssertEqual((removedSecond["d"] as? [[Any]])?[2] as NSArray?, ["09:00", 120, 1] as NSArray)
+    }
+    func testEchoConfirmationComparesOnlyWhatWasSent() throws {
+        let sent = try json(.torque(20))
+        XCTAssertFalse(sampleConfig.reflects(sent))
+        XCTAssertTrue(sampleConfig.merged(with: MowerConfig.parse(["tq": 20])).reflects(sent))
+        let slot = try json(.removeSlot(day: 6, second: false))
+        XCTAssertFalse(sampleConfig.reflects(slot))
+        XCTAssertTrue(MowerConfig.parse(["sc": try XCTUnwrap(slot["sc"])]).reflects(slot))
     }
 }

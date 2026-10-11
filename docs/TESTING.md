@@ -19,7 +19,10 @@ Always have someone next to the mower for steps that can make it move.
 
 - [ ] Wheel torque +10, mower on its base. The app reports "Setting applied" and the value shown is +10. Set it back afterwards if needed.
 - [ ] Delay after rain changed. The new value is shown after the confirmation.
-- [ ] Edge cut turned off on one slot. The schedule seen in the official app is unchanged apart from that slot, and the schedule is still enabled.
+- [ ] Schedule page: the slots match the official app, on the right days and hours.
+- [ ] Turn edge cut off on one slot, then change a slot's hours. The official app shows only those changes, and the schedule is still enabled.
+- [ ] Add a slot on a free day, then delete it. Deleting a day's first slot moves the second one up.
+- [ ] Overlapping two slots of the same day, or ending after midnight, is refused before sending.
 
 ## Commands (someone next to the mower)
 

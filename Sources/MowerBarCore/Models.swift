@@ -113,6 +113,18 @@ public struct Activity: Identifiable, Sendable {
 /// One mowing slot of the weekly schedule (`sc.d` / `sc.dd`): day 0 is Sunday, as sent by the mower.
 public struct ScheduleSlot: Hashable, Sendable {
     public var day: Int, second: Bool, start: String, minutes: Int, edgeCut: Bool
+    public init(day: Int, second: Bool, start: String, minutes: Int, edgeCut: Bool) {
+        self.day = day; self.second = second; self.start = start; self.minutes = minutes; self.edgeCut = edgeCut
+    }
+    /// Minutes since midnight for "HH:mm", nil if invalid.
+    public static func minutes(of time: String) -> Int? {
+        let parts = time.split(separator: ":")
+        guard parts.count == 2, parts[0].count == 2, parts[1].count == 2, let h = Int(parts[0]), let m = Int(parts[1]),
+              (0..<24).contains(h), (0..<60).contains(m) else { return nil }
+        return h * 60 + m
+    }
+    public var startMinutes: Int { Self.minutes(of: start) ?? 0 }
+    public var endMinutes: Int { startMinutes + minutes }
 }
 
 /// Settings read from `cfg`. Only the fields MowerBar can change are decoded.
@@ -134,6 +146,27 @@ public struct MowerConfig: Equatable, Sendable {
     }
     public var schedule: [String: Any]? {
         scheduleJSON.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    }
+    /// Whether the mower uses a second daily slot list (`dd`).
+    public var hasSecondSlots: Bool { schedule?["dd"] is [[Any]] }
+    /// Where a new slot can go on `day`: the first free position, or nil when the day is full.
+    public func freePosition(day: Int) -> Bool? {
+        let used = Set(slots.filter { $0.day == day }.map(\.second))
+        if !used.contains(false) { return false }
+        if hasSecondSlots && !used.contains(true) { return true }
+        return nil
+    }
+    /// True when `cfg` now holds what a sent setting asked for (used to confirm the mower's echo).
+    public func reflects(_ sent: [String: Any]) -> Bool {
+        if let tq = sent["tq"] as? Int, torque != tq { return false }
+        if let rd = sent["rd"] as? Int, rainDelay != rd { return false }
+        if let sc = sent["sc"] as? [String: Any] {
+            guard let schedule else { return false }
+            for key in ["d", "dd"] where sc[key] != nil {
+                guard let a = sc[key] as? NSArray, let b = schedule[key] as? NSArray, a == b else { return false }
+            }
+        }
+        return true
     }
     /// Active slots (duration above zero), first and second daily slots.
     public var slots: [ScheduleSlot] {

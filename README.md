@@ -13,7 +13,9 @@
 - **Menu bar panel**: the same state and commands with the window closed. The icon gets a warning badge when the mower reports an error, and can be hidden.
 - **Notifications**: new errors, errors cleared, activity changes and battery under 20 %.
 - **Activity log**, grouped by day.
-- **Fewer boundary exits** (wired models): wheel torque, delay after rain and edge cutting per schedule slot. These are configuration changes only; they never move the mower.
+- **Schedule** (wired models): the week as a calendar. Click a slot to change its hours or edge cutting, or add and delete slots (up to two a day).
+- **Fewer boundary exits** (wired models): wheel torque and delay after rain.
+- Schedule and settings changes are configuration only; they never move the mower.
 - **Experimental resume after an error** (off by default, see below).
 - English and French interface, following the Mac's language.
 
@@ -107,7 +109,8 @@ Texts are written in English in the code. French translations live in `Resources
 - panneau dans la barre des menus ;
 - notifications ;
 - journal d'activité ;
-- réglages anti-sorties de zone pour les modèles à fil : couple des roues, délai après la pluie, coupe de bordure par plage ;
+- planning de la semaine en vue calendrier, avec modification, ajout et suppression des plages (horaires, coupe de bordure) ;
+- réglages anti-sorties de zone pour les modèles à fil : couple des roues, délai après la pluie ;
 - reprise expérimentale après une erreur, désactivée par défaut, à tester seulement avec quelqu'un à côté du robot.
 
 L'interface est en français si ton Mac est en français.
